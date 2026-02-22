@@ -1,0 +1,15 @@
+[Unit]
+Description=HAProxy Discord Notifier - SMTP server for forwarding HAProxy alerts to Discord
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+Environment=WEBHOOK_URL=
+ExecStart=/usr/local/bin/haproxy-discord-notifier
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
