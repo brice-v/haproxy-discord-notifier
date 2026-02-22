@@ -33,6 +33,7 @@ It then forwards those email notifications to Discord using webhooks
 - Build `haproxy-discord-notifier` with `go build`
 - Ctrl+C to kill notifier gracefully.
 - Include WEBHOOK_URL=... in running path (such as `WEBHOOK_URL=... ./haproxy-discord-notifier`) or just add it to your environment
+- After following the steps to install, view logs via `journalctl -u haproxy-discord-notifier.service`
 
 ### Sources
 
