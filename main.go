@@ -2,9 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"log"
 	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 )
 
@@ -13,7 +17,9 @@ const (
 	expectedUrlPrefix     = "https://discord.com/api/webhooks/"
 )
 
-func verifyUrlShape(url string) {
+var url = ""
+
+func verifyUrlShape() {
 	if url == "" {
 		log.Fatalf("Provide `%s` through environment variables. Got empty string", webhookUrlEnvVariable)
 	}
@@ -28,6 +34,28 @@ func verifyUrlShape(url string) {
 	if len(finalParts) != 2 {
 		log.Fatalf("After splitting the suffix %s on `/` 2 parts were not found. The url should have /{webhook.id}/{webhook.token} at the end\n", urlParts[1])
 	}
+}
+
+type WebhookMessage struct {
+	Content string `json:"content"`
+}
+
+func postToWebhook(msg string) {
+	reqMsg, err := json.Marshal(WebhookMessage{Content: msg})
+	if err != nil {
+		log.Printf("ERROR: Failed to marshal message to WebhookMessage.\nMessage: `%s`\n", msg)
+		return
+	}
+	resp, err := http.DefaultClient.Post(url, "application/json", bytes.NewReader(reqMsg))
+	if err != nil {
+		log.Printf("ERROR: Failed to post to webhook. %s", err.Error())
+		return
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		log.Printf("ERROR: Status Code was not successful. got=%d", resp.StatusCode)
+		return
+	}
+	log.Printf("Successfully Posted to Webhook!")
 }
 
 func handleSMTPConnection(conn net.Conn) {
@@ -78,7 +106,9 @@ func handleSMTPConnection(conn net.Conn) {
 				msg.WriteString(dataLine)
 			}
 
-			log.Printf("Received email:\n%s\n", msg.String())
+			msgToSend := msg.String()
+			log.Printf("Received email:\n%s\n", msgToSend)
+			postToWebhook(msgToSend)
 			writer.WriteString("250 OK: queued\n")
 			writer.Flush()
 		case strings.HasPrefix(cmd, "QUIT"):
@@ -93,8 +123,8 @@ func handleSMTPConnection(conn net.Conn) {
 }
 
 func main() {
-	url := os.Getenv(webhookUrlEnvVariable)
-	verifyUrlShape(url)
+	url = os.Getenv(webhookUrlEnvVariable)
+	verifyUrlShape()
 
 	listener, err := net.Listen("tcp", ":9123")
 	if err != nil {
@@ -104,9 +134,23 @@ func main() {
 
 	log.Println("SMTP server listening on port 9123...")
 
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+
+	go func() {
+		<-sigChan
+		log.Println("\nShutting down...")
+		listener.Close()
+		os.Exit(0)
+	}()
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				// Just dont log on exit
+				os.Exit(0)
+			}
 			log.Printf("Error accepting connection: %v", err)
 			continue
 		}
