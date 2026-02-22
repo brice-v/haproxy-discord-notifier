@@ -16,6 +16,7 @@ It then forwards those email notifications to Discord using webhooks
   ```
   backend BACKEND-NAME
       email-alert MAILERS-NAME
+      email-alert level notice
       email-alert from FAKE@EMAIL.COM
       email-alert to FAKE@EMAIL.COM
       ... 
